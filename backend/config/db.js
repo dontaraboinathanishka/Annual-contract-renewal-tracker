@@ -3,20 +3,41 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-const dbPath = process.env.DB_PATH 
-  ? path.resolve(process.env.DB_PATH) 
-  : path.resolve(__dirname, '../database.sqlite');
+let dbPath;
+
+if (process.env.VERCEL) {
+  dbPath = '/tmp/database.sqlite';
+  const packagedDbPath = path.resolve(__dirname, '../database.sqlite');
+  
+  if (!fs.existsSync(dbPath)) {
+    try {
+      if (fs.existsSync(packagedDbPath)) {
+        fs.copyFileSync(packagedDbPath, dbPath);
+        console.log('Copied pre-seeded database to /tmp');
+      } else {
+        console.log('Packaged database not found, initDb will seed a new one in /tmp');
+      }
+    } catch (copyErr) {
+      console.error('Failed to copy database file:', copyErr.message);
+    }
+  }
+} else {
+  dbPath = process.env.DB_PATH 
+    ? path.resolve(process.env.DB_PATH) 
+    : path.resolve(__dirname, '../database.sqlite');
+}
 
 // Ensure database parent directory exists
 const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
   } else {
-    console.log('Connected to SQLite database.');
+    console.log('Connected to SQLite database at:', dbPath);
   }
 });
 
