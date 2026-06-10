@@ -60,17 +60,47 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize DB and start server
-const startServer = async () => {
-  try {
-    await initDb();
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+// Database initialization state
+let dbInitialized = false;
+let dbInitPromise = null;
+
+const ensureDb = async () => {
+  if (dbInitialized) return;
+  if (!dbInitPromise) {
+    dbInitPromise = initDb().then(() => {
+      dbInitialized = true;
+    }).catch(err => {
+      dbInitPromise = null;
+      throw err;
     });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
   }
+  await dbInitPromise;
 };
 
-startServer();
+// Middleware to ensure DB is initialized before any request
+app.use(async (req, res, next) => {
+  try {
+    await ensureDb();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Start server if not running on Vercel
+if (!process.env.VERCEL) {
+  const startServer = async () => {
+    try {
+      await ensureDb();
+      app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+      });
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  };
+  startServer();
+}
+
+module.exports = app;
